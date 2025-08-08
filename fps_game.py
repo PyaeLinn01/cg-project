@@ -6,6 +6,7 @@ import pyrr
 from ctypes import c_void_p
 import math
 import random
+import platform
 
 WIDTH, HEIGHT = 800, 600
 light_on = True
@@ -108,10 +109,28 @@ def process_input(window):
         camera_pos.y = ground_level
 
 def create_shader():
+    import platform
+    if platform.system() == "Darwin":
+        glsl_version = "#version 410 core\n"
+    else:
+        glsl_version = "#version 330 core\n"
     with open("vertex_shader.glsl") as f:
         vertex_src = f.read()
     with open("fragment_shader.glsl") as f:
         fragment_src = f.read()
+    # Replace the first line (should start with #version) with glsl_version
+    vertex_lines = vertex_src.splitlines()
+    fragment_lines = fragment_src.splitlines()
+    if vertex_lines and vertex_lines[0].lstrip().startswith("#version"):
+        vertex_lines[0] = glsl_version.rstrip('\n')
+    else:
+        vertex_lines.insert(0, glsl_version.rstrip('\n'))
+    if fragment_lines and fragment_lines[0].lstrip().startswith("#version"):
+        fragment_lines[0] = glsl_version.rstrip('\n')
+    else:
+        fragment_lines.insert(0, glsl_version.rstrip('\n'))
+    vertex_src = "\n".join(vertex_lines)
+    fragment_src = "\n".join(fragment_lines)
     return compileProgram(
         compileShader(vertex_src, GL_VERTEX_SHADER),
         compileShader(fragment_src, GL_FRAGMENT_SHADER)
@@ -313,8 +332,17 @@ def main():
 
     if not glfw.init():
         raise Exception("glfw cannot be initialized!")
+    # Set window hints for macOS (Darwin)
+    if platform.system() == "Darwin":
+        glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 4)
+        glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 1)
+        glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
+        glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, GL_TRUE)
     window = glfw.create_window(WIDTH, HEIGHT, "FPS Torchlight Demo", None, None)
     glfw.make_context_current(window)
+    # macOS Core Profile requires a VAO to be bound before using shaders
+    default_vao = glGenVertexArrays(1)
+    glBindVertexArray(default_vao)
     glfw.set_cursor_pos_callback(window, mouse_callback)
     glfw.set_key_callback(window, key_callback)
     glfw.set_mouse_button_callback(window, mouse_button_callback)
